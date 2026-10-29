@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<title>Studio 3D Trace</title>
+<style>
+:root{--bg:#15171c;--pn:#1f232b;--bd:#323846;--tx:#e8ebf0;--ac:#4d8dff}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--tx);font:14px system-ui,sans-serif;overflow:hidden;overscroll-behavior:none}
+#wrap{position:fixed;inset:0 0 auto 0;height:calc(100% - var(--ph,150px))}
+canvas{display:block;width:100%;height:100%;touch-action:none}
+#ui{position:fixed;left:0;right:0;bottom:0;background:var(--pn);border-top:1px solid var(--bd);padding-bottom:env(safe-area-inset-bottom,0px)}
+#tabs{display:flex;border-bottom:1px solid var(--bd)}
+#tabs button{flex:1;padding:12px 4px;background:none;border:0;color:#9aa3b2;font-size:14px}
+#tabs button.on{color:var(--tx);box-shadow:inset 0 -2px var(--ac)}
+.pane{display:none;gap:8px;padding:10px;overflow-x:auto;align-items:center;min-height:62px}
+.pane.on{display:flex}
+.pane>*{flex:0 0 auto}
+.b{min-height:44px;padding:0 14px;border-radius:10px;border:1px solid var(--bd);background:#2a303b;color:var(--tx);font-size:14px;display:inline-flex;align-items:center;gap:6px}
+.b.on{background:var(--ac);border-color:var(--ac)}
+.b.red{background:#5a2630;border-color:#7a3340}
+label.f{display:flex;flex-direction:column;font-size:11px;color:#9aa3b2;gap:2px}
+input[type=number]{width:84px;height:36px;border-radius:8px;border:1px solid var(--bd);background:#12141a;color:var(--tx);padding:0 8px;font-size:16px}
+input[type=range]{width:110px}
+input[type=color]{width:44px;height:44px;border:0;background:none;padding:0}
+#toast{position:fixed;top:calc(env(safe-area-inset-top,0px) + 10px);left:50%;transform:translateX(-50%);background:#000c;padding:8px 14px;border-radius:20px;opacity:0;transition:.25s;pointer-events:none;max-width:90%;text-align:center}
+#toast.on{opacity:1}
+#err{position:fixed;inset:0;display:none;align-items:center;justify-content:center;padding:24px;text-align:center;background:var(--bg)}
+@media(min-width:900px){.pane{padding:12px 16px}}
+</style>
+<script type="importmap">
+{"imports":{
+"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+"three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}
+</script>
+</head>
+<body>
+<div id="wrap"></div>
+<div id="toast"></div>
+<div id="err">Gagal memuat Three.js. Periksa koneksi internet lalu muat ulang.</div>
+<div id="ui">
+ <div id="tabs">
+  <button data-t="add" class="on">Tambah</button><button data-t="trace">Trace</button>
+  <button data-t="edit">Edit</button><button data-t="file">File</button>
+ </div>
+ <div class="pane on" id="p-add">
+  <button class="b" data-add="cube">▣ Kubus</button><button class="b" data-add="sphere">● Bola</button>
+  <button class="b" data-add="cylinder">⬭ Silinder</button><button class="b" data-add="cone">▲ Kerucut</button>
+  <button class="b" data-add="torus">◎ Torus</button><button class="b" data-add="plane">▭ Bidang</button>
+ </div>
+ <div class="pane" id="p-trace">
+  <label class="b" style="cursor:pointer">🖼 Impor gambar<input id="img" type="file" accept="image/*" hidden></label>
+  <label class="f">Lebar gambar (m)<input id="imgW" type="number" value="100" min="1" step="1" inputmode="decimal"></label>
+  <label class="f">Opasitas<input id="imgO" type="range" min="0.1" max="1" step="0.05" value="0.7"></label>
+  <button class="b" id="imgDel">Hapus gambar</button>
+  <button class="b" id="topv">⬇ Tampak atas</button>
+  <button class="b" id="trOn">✎ Mulai trace</button>
+  <button class="b" id="trUndo">↶ Titik</button>
+  <label class="f">Tinggi (m)<input id="trH" type="number" value="20" min="0.1" step="1" inputmode="decimal"></label>
+  <button class="b" id="trGo">⬆ Extrude</button>
+  <button class="b red" id="trCancel">Batal</button>
+ </div>
+ <div class="pane" id="p-edit">
+  <button class="b on" data-m="translate">Pindah</button><button class="b" data-m="rotate">Putar</button>
+  <button class="b" data-m="scale">Skala</button><button class="b" id="snap">Snap</button>
+  <input id="col" type="color" value="#9aa7b8" aria-label="Warna">
+  <button class="b" id="dup">⧉ Duplikat</button><button class="b" id="wire">Wireframe</button>
+  <button class="b red" id="del">🗑 Hapus</button>
+ </div>
+ <div class="pane" id="p-file">
+  <button class="b" id="exp">⬇ Ekspor .glb</button><button class="b" id="grid">Grid</button>
+  <button class="b" id="home">Reset kamera</button>
+ </div>
+</div>
+<script type="module">
+import * as THREE from 'three';
+import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
+import {TransformControls} from 'three/addons/controls/TransformControls.js';
+import {GLTFExporter} from 'three/addons/exporters/GLTFExporter.js';
+
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const wrap=$('#wrap'), toastEl=$('#toast');
+let tt; const toast=m=>{toastEl.textContent=m;toastEl.classList.add('on');clearTimeout(tt);tt=setTimeout(()=>toastEl.classList.remove('on'),1800)};
+
+const renderer=new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.shadowMap.enabled=true;
+wrap.appendChild(renderer.domElement);
+const scene=new THREE.Scene(); scene.background=new THREE.Color(0x1b1e25);
+const camera=new THREE.PerspectiveCamera(50,1,0.1,5000);
+const HOME=()=>{camera.position.set(60,50,80);controls.target.set(0,0,0);controls.update()};
+scene.add(new THREE.HemisphereLight(0xffffff,0x404050,1.0));
+const sun=new THREE.DirectionalLight(0xffffff,2); sun.position.set(80,150,60); sun.castShadow=true;
+sun.shadow.mapSize.set(2048,2048);
+Object.assign(sun.shadow.camera,{left:-150,right:150,top:150,bottom:-150,near:1,far:500});
+scene.add(sun);
+const gridH=new THREE.GridHelper(400,80,0x5a6275,0x2e3340); scene.add(gridH);
+const objs=new THREE.Group(); scene.add(objs);
+
+const controls=new OrbitControls(camera,renderer.domElement);
+controls.enableDamping=true; controls.maxPolarAngle=Math.PI*0.499; controls.maxDistance=2000;
+HOME();
+const tc=new TransformControls(camera,renderer.domElement); scene.add(tc);
+tc.addEventListener('dragging-changed',e=>{controls.enabled=!e.value; if(!e.value){blockUntil=performance.now()+150}});
+let blockUntil=0;
+
+function resize(){
+  const ph=$('#ui').offsetHeight; document.documentElement.style.setProperty('--ph',ph+'px');
+  const w=wrap.clientWidth,h=wrap.clientHeight; if(!w||!h)return;
+  renderer.setSize(w,h,true); camera.aspect=w/h; camera.updateProjectionMatrix();
+}
+addEventListener('resize',resize); addEventListener('orientationchange',()=>setTimeout(resize,200));
+new ResizeObserver(resize).observe($('#ui')); resize();
+renderer.setAnimationLoop(()=>{controls.update();renderer.render(scene,camera)});
+
+// Tabs
+$$('#tabs button').forEach(b=>b.onclick=()=>{
+  $$('#tabs button').forEach(x=>x.classList.toggle('on',x===b));
+  $$('.pane').forEach(p=>p.classList.toggle('on',p.id==='p-'+b.dataset.t));
+});
+
+// Objects
+let sel=null;
+const mat=c=>new THREE.MeshStandardMaterial({color:c||0x9aa7b8,roughness:.6,metalness:.05,side:THREE.DoubleSide});
+function addMesh(m){m.castShadow=m.receiveShadow=true;objs.add(m);select(m);return m}
+const GEO={
+  cube:()=>new THREE.BoxGeometry(10,10,10), sphere:()=>new THREE.SphereGeometry(5,48,32),
+  cylinder:()=>new THREE.CylinderGeometry(5,5,10,48), cone:()=>new THREE.ConeGeometry(5,10,48),
+  torus:()=>new THREE.TorusGeometry(5,1.6,24,64), plane:()=>new THREE.PlaneGeometry(10,10).rotateX(-Math.PI/2)};
+$$('[data-add]').forEach(b=>b.onclick=()=>{
+  const g=GEO[b.dataset.add](); const m=new THREE.Mesh(g,mat());
+  g.computeBoundingBox(); m.position.set(controls.target.x,-g.boundingBox.min.y,controls.target.z);
+  addMesh(m); toast('Ditambahkan');
+});
+function select(o){
+  sel=o; if(o){tc.attach(o);$('#col').value='#'+o.material.color.getHexString()}else tc.detach();
+}
+$$('[data-m]').forEach(b=>b.onclick=()=>{tc.setMode(b.dataset.m);$$('[data-m]').forEach(x=>x.classList.toggle('on',x===b))});
+let snapOn=false;
+$('#snap').onclick=e=>{snapOn=!snapOn;e.currentTarget.classList.toggle('on',snapOn);
+  tc.setTranslationSnap(snapOn?1:null);tc.setRotationSnap(snapOn?Math.PI/12:null);tc.setScaleSnap(snapOn?.1:null)};
+$('#col').oninput=e=>{if(sel)sel.material.color.set(e.target.value)};
+$('#dup').onclick=()=>{if(!sel)return toast('Pilih objek dulu');
+  const c=sel.clone(); c.material=sel.material.clone(); c.position.x+=3; c.position.z+=3; addMesh(c)};
+$('#wire').onclick=()=>{if(!sel)return toast('Pilih objek dulu');sel.material.wireframe=!sel.material.wireframe};
+$('#del').onclick=()=>{if(!sel)return toast('Pilih objek dulu');
+  const o=sel; select(null); objs.remove(o); o.geometry.dispose(); o.material.dispose()};
+
+// Picking (tap, bukan drag)
+const ray=new THREE.Raycaster(), ndc=new THREE.Vector2(), el=renderer.domElement;
+let down=null;
+el.addEventListener('pointerdown',e=>{down={x:e.clientX,y:e.clientY,t:performance.now(),n:1}});
+el.addEventListener('pointerup',e=>{
+  if(!down||tc.dragging||performance.now()<blockUntil){down=null;return}
+  const moved=Math.hypot(e.clientX-down.x,e.clientY-down.y); down=null;
+  if(moved>8)return;
+  const r=el.getBoundingClientRect();
+  ndc.set(((e.clientX-r.left)/r.width)*2-1,-((e.clientY-r.top)/r.height)*2+1);
+  ray.setFromCamera(ndc,camera);
+  if(tracing){
+    const p=new THREE.Vector3();
+    if(ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0,1,0),0),p)){addPoint(p)}
+    return;
+  }
+  const hit=ray.intersectObjects(objs.children,false)[0];
+  select(hit?hit.object:null);
+});
+
+// Reference image
+let ref=null;
+$('#img').onchange=e=>{
+  const f=e.target.files[0]; if(!f)return;
+  const url=URL.createObjectURL(f);
+  new THREE.TextureLoader().load(url,t=>{
+    t.colorSpace=THREE.SRGBColorSpace; t.anisotropy=renderer.capabilities.getMaxAnisotropy();
+    clearRef();
+    const a=t.image.width/t.image.height, W=100;
+    const g=new THREE.PlaneGeometry(W,W/a).rotateX(-Math.PI/2);
+    ref=new THREE.Mesh(g,new THREE.MeshBasicMaterial({map:t,transparent:true,opacity:+$('#imgO').value,depthWrite:false}));
+    ref.position.y=0.02; ref.renderOrder=-1; scene.add(ref);
+    applyW(); topView(); toast('Gambar dimuat. Atur lebar (m) sesuai skala nyata.');
+    URL.revokeObjectURL(url);
+  },undefined,()=>toast('Gambar gagal dimuat'));
+  e.target.value='';
+};
+function clearRef(){if(!ref)return;scene.remove(ref);ref.material.map.dispose();ref.material.dispose();ref.geometry.dispose();ref=null}
+function applyW(){if(ref){const s=Math.max(1,+$('#imgW').value||100)/100;ref.scale.set(s,1,s)}}
+$('#imgW').oninput=applyW;
+$('#imgO').oninput=e=>{if(ref)ref.material.opacity=+e.target.value};
+$('#imgDel').onclick=clearRef;
+function topView(){controls.target.set(0,0,0);camera.position.set(0,Math.max(120,(+$('#imgW').value||100)*1.1),0.01);controls.update()}
+$('#topv').onclick=topView;
+
+// Trace
+let tracing=false, pts=[]; const tg=new THREE.Group(); scene.add(tg);
+let line=null;
+function redraw(){
+  tg.children.slice().forEach(c=>{tg.remove(c);c.geometry?.dispose();c.material?.dispose()});
+  pts.forEach((p,i)=>{const m=new THREE.Mesh(new THREE.SphereGeometry(Math.max(.4,camera.position.length()*.008),12,8),
+    new THREE.MeshBasicMaterial({color:i?0xffcc33:0x33ff99,depthTest:false}));m.position.copy(p);m.renderOrder=10;tg.add(m)});
+  if(pts.length>1){const l=new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(pts.map(p=>p.clone().setY(.05))),
+    new THREE.LineBasicMaterial({color:0xffcc33,depthTest:false}));l.renderOrder=10;tg.add(l)}
+}
+function addPoint(p){pts.push(p);redraw()}
+function setTracing(v){tracing=v;$('#trOn').classList.toggle('on',v);$('#trOn').textContent=v?'✎ Trace aktif':'✎ Mulai trace';if(v)select(null)}
+$('#trOn').onclick=()=>{setTracing(!tracing);if(tracing)toast('Ketuk sudut-sudut gedung (geser untuk gerakkan kamera)')};
+$('#trUndo').onclick=()=>{pts.pop();redraw()};
+$('#trCancel').onclick=()=>{pts=[];redraw();setTracing(false)};
+$('#trGo').onclick=()=>{
+  if(pts.length<3)return toast('Minimal 3 titik');
+  const h=Math.max(.1,+$('#trH').value||10);
+  const sh=new THREE.Shape(pts.map(p=>new THREE.Vector2(p.x,-p.z)));
+  const g=new THREE.ExtrudeGeometry(sh,{depth:h,bevelEnabled:false});
+  g.rotateX(-Math.PI/2);
+  const m=new THREE.Mesh(g,mat(0xc9ced6)); addMesh(m);
+  pts=[];redraw();setTracing(false);toast('Gedung dibuat');
+};
+
+// File
+$('#exp').onclick=()=>{
+  if(!objs.children.length)return toast('Belum ada objek');
+  select(null);
+  new GLTFExporter().parse(objs,buf=>{
+    const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([buf],{type:'model/gltf-binary'}));
+    a.download='model.glb'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+  },err=>toast('Ekspor gagal'),{binary:true});
+};
+$('#grid').onclick=e=>{gridH.visible=!gridH.visible;e.currentTarget.classList.toggle('on',!gridH.visible)};
+$('#home').onclick=HOME;
+addEventListener('keydown',e=>{if(e.target.tagName==='INPUT')return;
+  if(e.key==='g')tc.setMode('translate');if(e.key==='r')tc.setMode('rotate');if(e.key==='s')tc.setMode('scale');
+  if(e.key==='Delete'||e.key==='x')$('#del').click()});
+</script>
+</body>
+</html>
