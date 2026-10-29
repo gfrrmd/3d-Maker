@@ -5,9 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
 <title>Studio 3D Trace</title>
 <style>
-:root{--bg:#15171c;--pn:#1f232b;--bd:#323846;--tx:#e8ebf0;--ac:#4d8dff}
+:root{--bg:#232323;--pn:#303030;--bd:#1a1a1a;--tx:#d9d9d9;--ac:#4772b3}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{margin:0;height:100%;background:var(--bg);color:var(--tx);font:14px system-ui,sans-serif;overflow:hidden;overscroll-behavior:none}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--tx);font:13px Inter,'Segoe UI',system-ui,sans-serif;overflow:hidden;overscroll-behavior:none}
 #wrap{position:fixed;inset:0 0 auto 0;height:calc(100% - var(--ph,150px))}
 canvas{display:block;width:100%;height:100%;touch-action:none}
 #ui{position:fixed;left:0;right:0;bottom:0;background:var(--pn);border-top:1px solid var(--bd);padding-bottom:env(safe-area-inset-bottom,0px)}
@@ -17,14 +17,15 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
 .pane{display:none;gap:8px;padding:10px;overflow-x:auto;align-items:center;min-height:62px}
 .pane.on{display:flex}
 .pane>*{flex:0 0 auto}
-.b{min-height:44px;padding:0 14px;border-radius:10px;border:1px solid var(--bd);background:#2a303b;color:var(--tx);font-size:14px;display:inline-flex;align-items:center;gap:6px}
+.b{min-height:44px;padding:0 14px;border-radius:4px;border:1px solid #1a1a1a;background:#4a4a4a;color:var(--tx);font-size:14px;display:inline-flex;align-items:center;gap:6px}
 .b.on{background:var(--ac);border-color:var(--ac)}
-.b.red{background:#5a2630;border-color:#7a3340}
+.b.red{background:#6b3434}
+select{height:36px;border-radius:4px;border:1px solid #1a1a1a;background:#4a4a4a;color:var(--tx);padding:0 8px;font-size:14px}
 label.f{display:flex;flex-direction:column;font-size:11px;color:#9aa3b2;gap:2px}
-input[type=number]{width:84px;height:36px;border-radius:8px;border:1px solid var(--bd);background:#12141a;color:var(--tx);padding:0 8px;font-size:16px}
+input[type=number]{width:84px;height:36px;border-radius:4px;border:1px solid #1a1a1a;background:#1d1d1d;color:var(--tx);padding:0 8px;font-size:16px}
 input[type=range]{width:110px}
 input[type=color]{width:44px;height:44px;border:0;background:none;padding:0}
-#toast{position:fixed;top:calc(env(safe-area-inset-top,0px) + 10px);left:50%;transform:translateX(-50%);background:#000c;padding:8px 14px;border-radius:20px;opacity:0;transition:.25s;pointer-events:none;max-width:90%;text-align:center}
+#toast{position:fixed;top:calc(env(safe-area-inset-top,0px) + 10px);left:50%;transform:translateX(-50%);background:#111e;padding:8px 14px;border-radius:4px;opacity:0;transition:.25s;pointer-events:none;max-width:90%;text-align:center}
 #toast.on{opacity:1}
 #err{position:fixed;inset:0;display:none;align-items:center;justify-content:center;padding:24px;text-align:center;background:var(--bg)}
 #hr{position:fixed;left:8px;top:calc(env(safe-area-inset-top,0px) + 8px);display:flex;gap:6px;z-index:5}.b:disabled{opacity:.35}
@@ -38,7 +39,7 @@ input[type=color]{width:44px;height:44px;border:0;background:none;padding:0}
 </head>
 <body>
 <div id="wrap"></div>
-<div id="hr"><button class="b" id="undo" disabled>↶ Undo</button><button class="b" id="redo" disabled>↷ Redo</button></div>
+<div id="hr"><button class="b" id="undo" disabled>Undo</button><button class="b" id="redo" disabled>Redo</button></div>
 <div id="toast"></div>
 <div id="err">Gagal memuat Three.js. Periksa koneksi internet lalu muat ulang.</div>
 <div id="ui">
@@ -47,31 +48,35 @@ input[type=color]{width:44px;height:44px;border:0;background:none;padding:0}
   <button data-t="edit">Edit</button><button data-t="file">File</button>
  </div>
  <div class="pane on" id="p-add">
-  <button class="b" data-add="cube">▣ Kubus</button><button class="b" data-add="sphere">● Bola</button>
-  <button class="b" data-add="cylinder">⬭ Silinder</button><button class="b" data-add="cone">▲ Kerucut</button>
-  <button class="b" data-add="torus">◎ Torus</button><button class="b" data-add="plane">▭ Bidang</button>
+  <button class="b" data-add="cube">Kubus</button><button class="b" data-add="sphere">Bola</button>
+  <button class="b" data-add="cylinder">Silinder</button><button class="b" data-add="cone">Kerucut</button>
+  <button class="b" data-add="torus">Torus</button><button class="b" data-add="plane">Bidang</button>
  </div>
  <div class="pane" id="p-trace">
-  <label class="b" style="cursor:pointer">🖼 Impor gambar<input id="img" type="file" accept="image/*" hidden></label>
+  <label class="b" style="cursor:pointer">Impor gambar<input id="img" type="file" accept="image/*" hidden></label>
   <label class="f">Lebar gambar (m)<input id="imgW" type="number" value="100" min="1" step="1" inputmode="decimal"></label>
   <label class="f">Opasitas<input id="imgO" type="range" min="0.1" max="1" step="0.05" value="0.7"></label>
   <button class="b" id="imgDel">Hapus gambar</button>
-  <button class="b" id="topv">⬇ Tampak atas</button>
-  <button class="b" id="trOn">✎ Mulai trace</button>
-  <button class="b" id="trUndo">↶ Titik</button>
+  <button class="b" id="topv">Tampak atas</button>
+  <select id="trType" aria-label="Jenis trace"><option value="bld">Bangunan</option><option value="road">Jalan</option></select>
+  <button class="b" id="trOn">Mulai trace</button>
+  <button class="b" id="trUndo">Hapus titik</button>
   <label class="f">Tinggi (m)<input id="trH" type="number" value="20" min="0.1" step="1" inputmode="decimal"></label>
-  <button class="b" id="trGo">⬆ Extrude</button>
+  <button class="b" id="trGo">Buat bangunan</button>
+  <label class="f">Lebar jalan (m)<input id="rW" type="number" value="8" min="1" step="0.5" inputmode="decimal"></label>
+  <label class="f">Trotoar (m)<input id="rS" type="number" value="2" min="0" step="0.5" inputmode="decimal"></label>
+  <button class="b" id="roadGo">Buat jalan</button>
   <button class="b red" id="trCancel">Batal</button>
  </div>
  <div class="pane" id="p-edit">
   <button class="b on" data-m="translate">Pindah</button><button class="b" data-m="rotate">Putar</button>
   <button class="b" data-m="scale">Skala</button><button class="b" id="snap">Snap</button>
-  <input id="col" type="color" value="#9aa7b8" aria-label="Warna">
-  <button class="b" id="dup">⧉ Duplikat</button><button class="b" id="wire">Wireframe</button>
-  <button class="b red" id="del">🗑 Hapus</button>
+  <input id="col" type="color" value="#cccccc" aria-label="Warna">
+  <button class="b" id="dup">Duplikat</button><button class="b" id="wire">Wireframe</button>
+  <button class="b red" id="del">Hapus</button>
  </div>
  <div class="pane" id="p-file">
-  <button class="b" id="exp">⬇ Ekspor .glb</button><button class="b" id="grid">Grid</button>
+  <button class="b" id="exp">Ekspor .glb</button><button class="b" id="grid">Grid</button>
   <button class="b" id="home">Reset kamera</button>
  </div>
 </div>
@@ -79,6 +84,7 @@ input[type=color]{width:44px;height:44px;border:0;background:none;padding:0}
 import * as THREE from 'three';
 import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {TransformControls} from 'three/addons/controls/TransformControls.js';
+import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 import {GLTFExporter} from 'three/addons/exporters/GLTFExporter.js';
 
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
@@ -89,7 +95,7 @@ const renderer=new THREE.WebGLRenderer({antialias:true});
 renderer.setPixelRatio(Math.min(devicePixelRatio,2));
 renderer.shadowMap.enabled=true;
 wrap.appendChild(renderer.domElement);
-const scene=new THREE.Scene(); scene.background=new THREE.Color(0x1b1e25);
+const scene=new THREE.Scene(); scene.background=new THREE.Color(0x3d3d3d);
 const camera=new THREE.PerspectiveCamera(50,1,0.1,5000);
 const HOME=()=>{camera.position.set(60,50,80);controls.target.set(0,0,0);controls.update()};
 scene.add(new THREE.HemisphereLight(0xffffff,0x404050,1.0));
@@ -97,7 +103,7 @@ const sun=new THREE.DirectionalLight(0xffffff,2); sun.position.set(80,150,60); s
 sun.shadow.mapSize.set(2048,2048);
 Object.assign(sun.shadow.camera,{left:-150,right:150,top:150,bottom:-150,near:1,far:500});
 scene.add(sun);
-const gridH=new THREE.GridHelper(400,80,0x5a6275,0x2e3340); scene.add(gridH);
+const gridH=new THREE.GridHelper(400,80,0x6b6b6b,0x4a4a4a); scene.add(gridH);
 const objs=new THREE.Group(); scene.add(objs);
 
 const controls=new OrbitControls(camera,renderer.domElement);
@@ -136,7 +142,7 @@ $$('#tabs button').forEach(b=>b.onclick=()=>{
 
 // Objects
 let sel=null;
-const mat=c=>new THREE.MeshStandardMaterial({color:c||0x9aa7b8,roughness:.6,metalness:.05,side:THREE.DoubleSide});
+const mat=c=>new THREE.MeshStandardMaterial({color:c||0xcccccc,roughness:.6,metalness:.05,side:THREE.DoubleSide});
 function drop(m){if(sel===m)select(null);objs.remove(m)}
 function addMesh(m){m.castShadow=m.receiveShadow=true;objs.add(m);select(m);
   push(()=>drop(m),()=>{objs.add(m);select(m)});return m}
@@ -150,7 +156,9 @@ $$('[data-add]').forEach(b=>b.onclick=()=>{
   addMesh(m); toast('Ditambahkan');
 });
 function select(o){
-  sel=o; if(o){tc.attach(o);$('#col').value='#'+o.material.color.getHexString()}else tc.detach();
+  if(sel&&sel!==o&&sel.material)sel.material.emissive.setHex(0);
+  sel=o; if(o)o.material.emissive.setHex(0x3a1f00);
+  if(o){tc.attach(o);$('#col').value='#'+o.material.color.getHexString()}else tc.detach();
 }
 $$('[data-m]').forEach(b=>b.onclick=()=>{tc.setMode(b.dataset.m);$$('[data-m]').forEach(x=>x.classList.toggle('on',x===b))});
 let snapOn=false;
@@ -229,11 +237,11 @@ function redraw(){
   tg.children.slice().forEach(c=>{tg.remove(c);c.geometry?.dispose();c.material?.dispose()});
   pts.forEach((p,i)=>{const m=new THREE.Mesh(new THREE.SphereGeometry(Math.max(.4,camera.position.length()*.008),12,8),
     new THREE.MeshBasicMaterial({color:i?0xffcc33:0x33ff99,depthTest:false}));m.position.copy(p);m.renderOrder=10;tg.add(m)});
-  if(pts.length>1){const l=new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(pts.map(p=>p.clone().setY(.05))),
+  if(pts.length>1){const l=new ($('#trType').value==='road'?THREE.Line:THREE.LineLoop)(new THREE.BufferGeometry().setFromPoints(pts.map(p=>p.clone().setY(.05))),
     new THREE.LineBasicMaterial({color:0xffcc33,depthTest:false}));l.renderOrder=10;tg.add(l)}
 }
 function addPoint(p){pts.push(p);redraw()}
-function setTracing(v){tracing=v;$('#trOn').classList.toggle('on',v);$('#trOn').textContent=v?'✎ Trace aktif':'✎ Mulai trace';if(v)select(null)}
+function setTracing(v){tracing=v;$('#trOn').classList.toggle('on',v);$('#trOn').textContent=v?'Trace aktif':'Mulai trace';if(v)select(null)}
 $('#trOn').onclick=()=>{setTracing(!tracing);if(tracing)toast('Ketuk sudut-sudut gedung (geser untuk gerakkan kamera)')};
 $('#trUndo').onclick=()=>{pts.pop();redraw()};
 $('#trCancel').onclick=()=>{pts=[];redraw();setTracing(false)};
@@ -247,6 +255,35 @@ $('#trGo').onclick=()=>{
   pts=[];redraw();setTracing(false);toast('Gedung dibuat');
 };
 
+// Road builder
+$('#trType').onchange=redraw;
+function offsets(P,d){return P.map((p,i)=>{
+  const t1=i>0?p.clone().sub(P[i-1]).setY(0).normalize():null;
+  const t2=i<P.length-1?P[i+1].clone().sub(p).setY(0).normalize():null;
+  const t=(t1&&t2)?t1.clone().add(t2).normalize():(t1||t2);
+  const n=new THREE.Vector3(-t.z,0,t.x); let k=1;
+  if(t1&&t2){k=1/Math.max(.35,n.dot(new THREE.Vector3(-t1.z,0,t1.x)))}
+  return p.clone().addScaledVector(n,d*k)})}
+function strip(A,B,yA,yB){const pos=[],idx=[];
+  A.forEach((a,i)=>pos.push(a.x,yA,a.z,B[i].x,yB,B[i].z));
+  for(let i=0;i<A.length-1;i++){const k=i*2;idx.push(k,k+1,k+2,k+1,k+3,k+2)}
+  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));
+  g.setIndex(idx);g.computeVertexNormals();return g}
+function addMulti(ms){ms.forEach(m=>{m.castShadow=m.receiveShadow=true;objs.add(m)});select(ms[0]);
+  push(()=>ms.forEach(m=>drop(m)),()=>{ms.forEach(m=>objs.add(m));select(ms[0])})}
+$('#roadGo').onclick=()=>{
+  if(pts.length<2)return toast('Minimal 2 titik sumbu jalan');
+  const W=Math.max(1,+$('#rW').value||8),S=Math.max(0,+$('#rS').value||0),H=.15,h=W/2;
+  const P=pts.map(p=>p.clone().setY(0));
+  const L0=offsets(P,h),R0=offsets(P,-h),L1=offsets(P,h+S),R1=offsets(P,-h-S),Lc=offsets(P,.12),Rc=offsets(P,-.12);
+  const mk=(g,c,n)=>{const m=new THREE.Mesh(g,mat(c));m.name=n;return m};
+  const ms=[mk(strip(L0,R0,.05,.05),0x2e3033,'Jalan'),mk(strip(Lc,Rc,.12,.12),0xe6e6e6,'Marka')];
+  if(S>0){
+    ms.push(mk(mergeGeometries([strip(L0,L1,H,H),strip(L0,L0,.05,H),strip(L1,L1,.05,H)]),0xa8abb0,'Trotoar kiri'));
+    ms.push(mk(mergeGeometries([strip(R0,R1,H,H),strip(R0,R0,.05,H),strip(R1,R1,.05,H)]),0xa8abb0,'Trotoar kanan'));
+  }
+  addMulti(ms); pts=[];redraw();setTracing(false);toast('Jalan dibuat');
+};
 // File
 $('#exp').onclick=()=>{
   if(!objs.children.length)return toast('Belum ada objek');
