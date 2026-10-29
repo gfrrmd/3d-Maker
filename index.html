@@ -27,6 +27,7 @@ input[type=color]{width:44px;height:44px;border:0;background:none;padding:0}
 #toast{position:fixed;top:calc(env(safe-area-inset-top,0px) + 10px);left:50%;transform:translateX(-50%);background:#000c;padding:8px 14px;border-radius:20px;opacity:0;transition:.25s;pointer-events:none;max-width:90%;text-align:center}
 #toast.on{opacity:1}
 #err{position:fixed;inset:0;display:none;align-items:center;justify-content:center;padding:24px;text-align:center;background:var(--bg)}
+#hr{position:fixed;left:8px;top:calc(env(safe-area-inset-top,0px) + 8px);display:flex;gap:6px;z-index:5}.b:disabled{opacity:.35}
 @media(min-width:900px){.pane{padding:12px 16px}}
 </style>
 <script type="importmap">
@@ -37,6 +38,7 @@ input[type=color]{width:44px;height:44px;border:0;background:none;padding:0}
 </head>
 <body>
 <div id="wrap"></div>
+<div id="hr"><button class="b" id="undo" disabled>↶ Undo</button><button class="b" id="redo" disabled>↷ Redo</button></div>
 <div id="toast"></div>
 <div id="err">Gagal memuat Three.js. Periksa koneksi internet lalu muat ulang.</div>
 <div id="ui">
@@ -102,8 +104,20 @@ const controls=new OrbitControls(camera,renderer.domElement);
 controls.enableDamping=true; controls.maxPolarAngle=Math.PI*0.499; controls.maxDistance=2000;
 HOME();
 const tc=new TransformControls(camera,renderer.domElement); scene.add(tc);
-tc.addEventListener('dragging-changed',e=>{controls.enabled=!e.value; if(!e.value){blockUntil=performance.now()+150}});
-let blockUntil=0;
+let blockUntil=0, before=null;
+const snapT=o=>({p:o.position.clone(),q:o.quaternion.clone(),s:o.scale.clone()});
+const applyT=(o,t)=>{o.position.copy(t.p);o.quaternion.copy(t.q);o.scale.copy(t.s)};
+tc.addEventListener('dragging-changed',e=>{controls.enabled=!e.value;const o=tc.object;
+  if(e.value){before=o?snapT(o):null}
+  else{blockUntil=performance.now()+150;
+    if(o&&before){const a=before,b=snapT(o);before=null;push(()=>applyT(o,a),()=>applyT(o,b))}}});
+// History (undo/redo)
+const hist=[]; let hi=0;
+function ui(){$('#undo').disabled=hi<1;$('#redo').disabled=hi>=hist.length}
+function push(u,r){hist.length=hi;hist.push({u,r});hi=hist.length;ui()}
+function undo(){if(hi>0){hist[--hi].u();ui()}else toast('Tidak ada yang di-undo')}
+function redo(){if(hi<hist.length){hist[hi++].r();ui()}}
+$('#undo').onclick=undo;$('#redo').onclick=redo;
 
 function resize(){
   const ph=$('#ui').offsetHeight; document.documentElement.style.setProperty('--ph',ph+'px');
@@ -123,7 +137,9 @@ $$('#tabs button').forEach(b=>b.onclick=()=>{
 // Objects
 let sel=null;
 const mat=c=>new THREE.MeshStandardMaterial({color:c||0x9aa7b8,roughness:.6,metalness:.05,side:THREE.DoubleSide});
-function addMesh(m){m.castShadow=m.receiveShadow=true;objs.add(m);select(m);return m}
+function drop(m){if(sel===m)select(null);objs.remove(m)}
+function addMesh(m){m.castShadow=m.receiveShadow=true;objs.add(m);select(m);
+  push(()=>drop(m),()=>{objs.add(m);select(m)});return m}
 const GEO={
   cube:()=>new THREE.BoxGeometry(10,10,10), sphere:()=>new THREE.SphereGeometry(5,48,32),
   cylinder:()=>new THREE.CylinderGeometry(5,5,10,48), cone:()=>new THREE.ConeGeometry(5,10,48),
@@ -140,18 +156,32 @@ $$('[data-m]').forEach(b=>b.onclick=()=>{tc.setMode(b.dataset.m);$$('[data-m]').
 let snapOn=false;
 $('#snap').onclick=e=>{snapOn=!snapOn;e.currentTarget.classList.toggle('on',snapOn);
   tc.setTranslationSnap(snapOn?1:null);tc.setRotationSnap(snapOn?Math.PI/12:null);tc.setScaleSnap(snapOn?.1:null)};
-$('#col').oninput=e=>{if(sel)sel.material.color.set(e.target.value)};
+let colOld=null;
+$('#col').oninput=e=>{if(!sel)return;if(!colOld)colOld={m:sel.material,c:sel.material.color.clone()};sel.material.color.set(e.target.value)};
+$('#col').onchange=()=>{if(!colOld)return;const {m,c}=colOld,n=m.color.clone();colOld=null;push(()=>m.color.copy(c),()=>m.color.copy(n))};
 $('#dup').onclick=()=>{if(!sel)return toast('Pilih objek dulu');
   const c=sel.clone(); c.material=sel.material.clone(); c.position.x+=3; c.position.z+=3; addMesh(c)};
-$('#wire').onclick=()=>{if(!sel)return toast('Pilih objek dulu');sel.material.wireframe=!sel.material.wireframe};
+$('#wire').onclick=()=>{if(!sel)return toast('Pilih objek dulu');const m=sel.material,f=()=>{m.wireframe=!m.wireframe};f();push(f,f)};
 $('#del').onclick=()=>{if(!sel)return toast('Pilih objek dulu');
-  const o=sel; select(null); objs.remove(o); o.geometry.dispose(); o.material.dispose()};
+  const o=sel; drop(o); push(()=>{objs.add(o);select(o)},()=>drop(o))};
 
 // Picking (tap, bukan drag)
 const ray=new THREE.Raycaster(), ndc=new THREE.Vector2(), el=renderer.domElement;
 let down=null;
-el.addEventListener('pointerdown',e=>{down={x:e.clientX,y:e.clientY,t:performance.now(),n:1}});
+let dragIdx=-1;
+function groundAt(e,out){const r=el.getBoundingClientRect();
+  ndc.set(((e.clientX-r.left)/r.width)*2-1,-((e.clientY-r.top)/r.height)*2+1);ray.setFromCamera(ndc,camera);
+  return ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0,1,0),0),out)}
+el.addEventListener('pointerdown',e=>{down={x:e.clientX,y:e.clientY,t:performance.now(),n:1};
+  if(tracing&&pts.length){const r=el.getBoundingClientRect();let best=28;dragIdx=-1;
+    pts.forEach((p,i)=>{const v=p.clone().project(camera);
+      const d=Math.hypot((v.x+1)/2*r.width+r.left-e.clientX,(1-v.y)/2*r.height+r.top-e.clientY);
+      if(d<best){best=d;dragIdx=i}});
+    if(dragIdx>=0)controls.enabled=false}});
+el.addEventListener('pointermove',e=>{if(dragIdx<0)return;const p=new THREE.Vector3();if(groundAt(e,p)){pts[dragIdx].copy(p);redraw()}});
+el.addEventListener('pointercancel',()=>{if(dragIdx>=0){dragIdx=-1;controls.enabled=true}down=null});
 el.addEventListener('pointerup',e=>{
+  if(dragIdx>=0){dragIdx=-1;controls.enabled=true;down=null;return}
   if(!down||tc.dragging||performance.now()<blockUntil){down=null;return}
   const moved=Math.hypot(e.clientX-down.x,e.clientY-down.y); down=null;
   if(moved>8)return;
@@ -229,6 +259,8 @@ $('#exp').onclick=()=>{
 $('#grid').onclick=e=>{gridH.visible=!gridH.visible;e.currentTarget.classList.toggle('on',!gridH.visible)};
 $('#home').onclick=HOME;
 addEventListener('keydown',e=>{if(e.target.tagName==='INPUT')return;
+  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();e.shiftKey?redo():undo();return}
+  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='y'){e.preventDefault();redo();return}
   if(e.key==='g')tc.setMode('translate');if(e.key==='r')tc.setMode('rotate');if(e.key==='s')tc.setMode('scale');
   if(e.key==='Delete'||e.key==='x')$('#del').click()});
 </script>
